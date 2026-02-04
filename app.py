@@ -1,3 +1,5 @@
+import os  # 1. 記得在最上方加入這一行
+
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -29,3 +31,9 @@ def save_data():
 if __name__ == '__main__':
     print("排課系統已啟動：http://127.0.0.1:5000")
     app.run(debug=True, port=5000)
+
+if __name__ == '__main__':
+    # 2. 修改這裡：從環境變數抓 Port，抓不到就用 5000
+    port = int(os.environ.get("PORT", 5000))
+    # 3. host 必須設定為 '0.0.0.0' 才能對外連線
+    app.run(host='0.0.0.0', port=port)
