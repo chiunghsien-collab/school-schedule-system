@@ -1,39 +1,53 @@
-import os  # 1. 記得在最上方加入這一行
-
 from flask import Flask, render_template, request, jsonify
+import json
+import os
 
 app = Flask(__name__)
+DATA_FILE = 'data.json'
 
-# 所有的資料都統一存在這裡
-db_data = {
-    "classes": [], # 格式: {"id": 1, "name": "101", "subjects": {"國語": 6}}
-    "subjects": ["國語", "英語", "本土語", "數學", "社會", "自然", "體育", "健康", "美勞", "音樂", "生活", "綜合", "閱讀", "本位", "資訊"]
-}
+# --- 核心設定：禁用瀏覽器快取 ---
+# 這樣你修改 index.html 後，重新整理網頁才會立刻看到 v6.8
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
 
 @app.route('/')
 def index():
+    # 確保你的 HTML 檔案放在 templates 資料夾內
     return render_template('index.html')
 
-# 取得目前所有資料
 @app.route('/get_data', methods=['GET'])
 def get_data():
-    return jsonify(db_data)
+    """讀取現有的排課資料"""
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                return jsonify(json.load(f))
+        except Exception as e:
+            print(f"讀取 JSON 出錯: {e}")
+            return jsonify({"classes": [], "teachers": [], "schedules": {}})
+    return jsonify({"classes": [], "teachers": [], "schedules": {}})
 
-# 儲存所有資料 (當前端按下儲存或變動時呼叫)
 @app.route('/save_data', methods=['POST'])
 def save_data():
-    global db_data
-    incoming_data = request.json
-    db_data["classes"] = incoming_data.get('classes', [])
-    db_data["subjects"] = incoming_data.get('subjects', db_data["subjects"])
-    return jsonify({"status": "success", "message": "伺服器已同步"})
+    """儲存排課資料至 data.json"""
+    try:
+        data = request.json
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"儲存失敗: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    print("排課系統已啟動：http://127.0.0.1:5000")
-    app.run(debug=True, port=5000)
-
-if __name__ == '__main__':
-    # 2. 修改這裡：從環境變數抓 Port，抓不到就用 5000
-    port = int(os.environ.get("PORT", 5000))
-    # 3. host 必須設定為 '0.0.0.0' 才能對外連線
-    app.run(host='0.0.0.0', port=port)
+    # host='0.0.0.0' 允許同區域網路的其他裝置連線
+    # port=5000 是預設埠位
+    print("-----------------------------------------")
+    print(" 國小排課系統後端已啟動！")
+    print(" 請在瀏覽器輸入: http://127.0.0.1:5000")
+    print("-----------------------------------------")
+    app.run(host='0.0.0.0', port=5000, debug=True)
