@@ -1,1 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>國民小學排課系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #1a73e8; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; }
+        .toolbar { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        button { cursor: pointer; border: none; padding: 8px 15px; border-radius: 5px; transition: 0.2s; font-weight: bold; }
+        .btn-add { background: #1a73e8; color: white; }
+        .btn-save { background: #673ab7; color: white; }
+        .btn-load { background: #009688; color: white; }
+        .btn-subject { background: #ff5722; color: white; }
+        
+        #classList { padding: 0; }
+        .class-item { list-style: none; border: 1px solid #ddd; margin-bottom: 15px; padding: 15px; border-radius: 8px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .class-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .drag-handle { cursor: grab; font-size: 20px; color: #999; margin-right: 10px; }
+        .total-badge { background: #202124; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9em; }
+        
+        .subject-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .sub-btn { background: #f8f9fa; border: 1px solid #ccc; padding: 8px 12px; border-radius: 6px; font-size: 14px; min-width: 80px; text-align: center; }
+        .sub-btn.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+        .sub-count { font-weight: bold; margin-left: 5px; }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <h1>🏫 國民小學排課系統</h1>
+
+    <div class="toolbar">
+        <input type="text" id="classNameInput" placeholder="輸入班級 (如: 101)" style="padding: 8px;">
+        <button class="btn-add" onclick="addClass()">➕ 新增班級</button>
+        <button class="btn-subject" onclick="addNewSubject()">🎨 新增自訂科目</button>
+        <div style="flex-grow: 1;"></div>
+        <button class="btn-save" onclick="exportJSON()">💾 匯出存檔</button>
+        <input type="file" id="fileInput" style="display: none;" onchange="importJSON(event)">
+        <button class="btn-load" onclick="document.getElementById('fileInput').click()">📂 讀取舊檔</button>
+    </div>
+
+    <ul id="classList"></ul>
+</div>
+
+<script>
+    let classes = [];
+    let subjects = ["國語", "英語", "本土語", "數學", "社會", "自然", "體育", "健康", "美勞", "音樂", "生活", "綜合", "閱讀", "本位", "資訊"];
+
+    window.onload = function() {
+        initSortable();
+        render();
+    };
+
+    function initSortable() {
+        const el = document.getElementById('classList');
+        Sortable.create(el, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: function() {
+                const newOrder = Array.from(el.children).map(li => parseInt(li.getAttribute('data-id')));
+                classes.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+                syncWithServer();
+            }
+        });
+    }
+
+    function addClass() {
+        const input = document.getElementById('classNameInput');
+        if (!input.value) return alert("請輸入班級名稱");
+        classes.push({ id: Date.now(), name: input.value, subjects: {} });
+        input.value = '';
+        render();
+        syncWithServer();
+    }
+
+    function addNewSubject() {
+        const name = prompt("請輸入新科目名稱：");
+        if (name && !subjects.includes(name)) {
+            subjects.push(name);
+            render();
+            syncWithServer();
+        }
+    }
+
+    function updateHour(classId, sub, delta) {
+        const cls = classes.find(c => c.id === classId);
+        if (!cls.subjects[sub]) cls.subjects[sub] = 0;
+        cls.subjects[sub] = Math.max(0, cls.subjects[sub] + delta);
+        render();
+        syncWithServer();
+    }
+
+    function copyToGrade(sourceName, sourceId) {
+        const grade = sourceName.charAt(0);
+        const sourceCls = classes.find(c => c.id === sourceId);
+        classes.forEach(cls => {
+            if (cls.name.startsWith(grade)) {
+                cls.subjects = JSON.parse(JSON.stringify(sourceCls.subjects));
+            }
+        });
+        alert(`已複製 ${grade} 年級設定`);
+        render();
+        syncWithServer();
+    }
+
+    function deleteClass(id) {
+        if(confirm("確定刪除？")) {
+            classes = classes.filter(c => c.id !== id);
+            render();
+            syncWithServer();
+        }
+    }
+
+    async function syncWithServer() {
+        await fetch('/save_data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ classes, subjects })
+        });
+    }
+
+    function render() {
+        const list = document.getElementById('classList');
+        list.innerHTML = classes.map(cls => {
+            const total = Object.values(cls.subjects).reduce((a, b) => a + b, 0);
+            return `
+                <li class="class-item" data-id="${cls.id}">
+                    <div class="class-header">
+                        <div>
+                            <span class="drag-handle">☰</span>
+                            <span style="font-size: 1.2em; font-weight: bold;">${cls.name} 班</span>
+                        </div>
+                        <div class="total-badge">總節數：${total}</div>
+                        <div>
+                            <button onclick="copyToGrade('${cls.name}', ${cls.id})" style="background:#4caf50; color:white;">年級複製</button>
+                            <button onclick="deleteClass(${cls.id})" style="background:#f44336; color:white;">刪除</button>
+                        </div>
+                    </div>
+                    <div class="subject-grid">
+                        ${subjects.map(sub => {
+                            const count = cls.subjects[sub] || 0;
+                            return `
+                                <button class="sub-btn ${count > 0 ? 'active' : ''}" 
+                                    onmousedown="if(event.button==0) updateHour(${cls.id}, '${sub}', 1)"
+                                    oncontextmenu="updateHour(${cls.id}, '${sub}', -1); return false;">
+                                    ${sub} <span class="sub-count">${count}</span>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                </li>
+            `;
+        }).join('');
+    }
+
+    function exportJSON() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({classes, subjects}));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "school_data.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function importJSON(event) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = JSON.parse(e.target.result);
+            classes = data.classes || [];
+            subjects = data.subjects || subjects;
+            render();
+            syncWithServer();
+        };
+        reader.readAsText(event.target.files[0]);
+    }
+</script>
+
+</body>
+</html>
