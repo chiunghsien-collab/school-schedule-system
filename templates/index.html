@@ -2,182 +2,308 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>國民小學排課系統</title>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <title>國小排課系統 v7.0 - 全功能穩定版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h1 { color: #1a73e8; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; }
-        .toolbar { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        button { cursor: pointer; border: none; padding: 8px 15px; border-radius: 5px; transition: 0.2s; font-weight: bold; }
-        .btn-add { background: #1a73e8; color: white; }
-        .btn-save { background: #673ab7; color: white; }
-        .btn-load { background: #009688; color: white; }
-        .btn-subject { background: #ff5722; color: white; }
+        :root { --primary: #1a73e8; --teacher-bg: #fffde7; --teacher-border: #fbc02d; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #eef2f7; padding: 20px; }
+        .container { max-width: 1600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         
-        #classList { padding: 0; }
-        .class-item { list-style: none; border: 1px solid #ddd; margin-bottom: 15px; padding: 15px; border-radius: 8px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .class-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .drag-handle { cursor: grab; font-size: 20px; color: #999; margin-right: 10px; }
-        .total-badge { background: #202124; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9em; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .action-btn { border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; font-size: 14px; }
         
-        .subject-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-        .sub-btn { background: #f8f9fa; border: 1px solid #ccc; padding: 8px 12px; border-radius: 6px; font-size: 14px; min-width: 80px; text-align: center; }
-        .sub-btn.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
-        .sub-count { font-weight: bold; margin-left: 5px; }
+        /* 匯入區域 */
+        .import-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px dashed var(--primary); }
+        .import-card h3 { margin-top: 0; font-size: 16px; color: #1565c0; }
+
+        /* 班級選擇區 */
+        .grade-container { background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd; }
+        .grade-row { display: flex; align-items: center; margin-bottom: 5px; }
+        .grade-label { width: 80px; font-weight: bold; color: #666; }
+        .class-btn { border: 1px solid #ddd; background: white; padding: 5px 12px; margin: 2px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .class-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .main-grid { display: grid; grid-template-columns: 1fr 300px 1fr; gap: 20px; }
+        .table-card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; background: white; }
+        table { border-collapse: collapse; width: 100%; text-align: center; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; height: 70px; position: relative; font-size: 14px; }
+        th { background: #f1f3f4; height: 35px; }
+        
+        /* 老師方塊 */
+        .pool-item, .drag-item { 
+            background: #e8f0fe; border: 1px solid var(--primary); 
+            padding: 8px; border-radius: 6px; cursor: move; 
+            user-select: none; transition: 0.2s;
+        }
+        .pool-item.selected { border: 3px solid #f44336 !important; background: #ffebee; box-shadow: 0 0 10px rgba(244,67,54,0.2); }
+        .hours-badge { position: absolute; top: 2px; right: 2px; background: var(--primary); color: white; font-size: 10px; padding: 1px 5px; border-radius: 10px; }
+        
+        /* 點擊選取模式視覺提示 */
+        .drop-zone-active { background: #fffde7; border: 2px dashed var(--primary) !important; cursor: pointer; }
+        .drop-zone-active:hover { background: #fff9c4; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🏫 國民小學排課系統</h1>
-
-    <div class="toolbar">
-        <input type="text" id="classNameInput" placeholder="輸入班級 (如: 101)" style="padding: 8px;">
-        <button class="btn-add" onclick="addClass()">➕ 新增班級</button>
-        <button class="btn-subject" onclick="addNewSubject()">🎨 新增自訂科目</button>
-        <div style="flex-grow: 1;"></div>
-        <button class="btn-save" onclick="exportJSON()">💾 匯出存檔</button>
-        <input type="file" id="fileInput" style="display: none;" onchange="importJSON(event)">
-        <button class="btn-load" onclick="document.getElementById('fileInput').click()">📂 讀取舊檔</button>
+    <div class="header">
+        <h2 style="margin:0; color:var(--primary);">🏫 國小排課系統 v7.0</h2>
+        <div>
+            <label for="importFile" class="action-btn" style="background:#009688; cursor:pointer;">📂 匯入存檔</label>
+            <input type="file" id="importFile" style="display:none;" accept=".json">
+            <button onclick="exportJSON()" class="action-btn" style="background:#673ab7;">💾 匯出存檔</button>
+        </div>
     </div>
 
-    <ul id="classList"></ul>
+    <div class="import-section">
+        <div class="import-card">
+            <h3>第一步：匯入班級 Excel</h3>
+            <input type="file" onchange="importClassExcel(event)" accept=".xlsx, .xls">
+        </div>
+        <div class="import-card">
+            <h3>第二步：匯入教師 Excel</h3>
+            <input type="file" onchange="importTeacherExcel(event)" accept=".xlsx, .xls">
+        </div>
+    </div>
+
+    <div id="gradePanel" class="grade-container"></div>
+
+    <div class="main-grid">
+        <div class="table-card">
+            <h3 id="classTitle">📌 班級課表</h3>
+            <table>
+                <thead><tr><th>節</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th></tr></thead>
+                <tbody id="classTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div class="table-card" ondragover="evP(event)" ondrop="handleBackDrop(event)">
+            <h3>👥 待排教師</h3>
+            <div id="poolItems"></div>
+            <p style="font-size:12px; color:#999; margin-top:10px;">提示：點選老師後，直接點擊課表格子即可排入。</p>
+        </div>
+
+        <div class="table-card" style="background: var(--teacher-bg)">
+            <h3 id="teacherTitle">🔍 老師行程</h3>
+            <table>
+                <thead><tr><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th></tr></thead>
+                <tbody id="teacherTableBody"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <script>
-    let classes = [];
-    let subjects = ["國語", "英語", "本土語", "數學", "社會", "自然", "體育", "健康", "美勞", "音樂", "生活", "綜合", "閱讀", "本位", "資訊"];
+    let db = { classes: [], teachers: [], schedules: {} };
+    let currentClass = "";
+    let selectedTeacher = "";
+    let dragData = null; 
 
-    window.onload = function() {
-        initSortable();
-        render();
+    window.onload = async () => {
+        try {
+            const resp = await fetch('/get_data');
+            db = await resp.json();
+            if (db.classes?.length > 0) {
+                renderGradeButtons();
+                selectClass(db.classes[0].name);
+            }
+        } catch(e) { console.log("等待資料中..."); }
     };
 
-    function initSortable() {
-        const el = document.getElementById('classList');
-        Sortable.create(el, {
-            animation: 150,
-            handle: '.drag-handle',
-            onEnd: function() {
-                const newOrder = Array.from(el.children).map(li => parseInt(li.getAttribute('data-id')));
-                classes.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
-                syncWithServer();
+    function evP(e) { e.preventDefault(); }
+
+    function selectClass(name) { 
+        currentClass = name; 
+        renderGradeButtons(); 
+        renderAll(); 
+    }
+
+    // 選取老師（支援物理拖曳與點擊選取）
+    function pickTeacher(name, sub, type, oldKey = '') {
+        selectedTeacher = name;
+        dragData = { name, sub, type, oldKey, targetClass: currentClass };
+        renderAll();
+    }
+
+    function renderAll() {
+        if(!currentClass) return;
+        document.getElementById('classTitle').innerText = `📌 ${currentClass} 班級課表`;
+        renderClassTable();
+        renderPool();
+        renderTeacherTable();
+    }
+
+    function renderClassTable() {
+        const body = document.getElementById('classTableBody');
+        body.innerHTML = '';
+        for(let p=1; p<=7; p++) {
+            let tr = `<tr><td>${p}</td>`;
+            for(let d=1; d<=5; d++) {
+                const key = `${d}-${p}`;
+                const data = db.schedules[currentClass]?.[key];
+                const activeZone = dragData ? 'drop-zone-active' : '';
+                
+                let content = "";
+                if(data) {
+                    content = `<div class="drag-item" draggable="true" 
+                        onpointerdown="pickTeacher('${data.name}', '${data.sub}', 'table', '${key}')"
+                        ondragstart="onDs(event, 'table', '${data.name}', '${data.sub}', '${key}')">
+                        ${data.sub}<br>${data.name}</div>`;
+                }
+                tr += `<td class="${activeZone}" ondragover="evP(event)" 
+                    onclick="onCellClick('${key}')" ondrop="onDp(event, '${key}')">${content}</td>`;
+            }
+            body.innerHTML += tr + "</tr>";
+        }
+    }
+
+    function renderPool() {
+        const container = document.getElementById('poolItems');
+        container.innerHTML = '';
+        db.teachers.forEach(t => {
+            t.assignments.filter(as => as.className === currentClass).forEach(as => {
+                const used = Object.values(db.schedules[currentClass] || {}).filter(v => v.name === t.name && v.sub === as.subject).length;
+                const remain = as.hours - used;
+                if(remain > 0) {
+                    const isSel = selectedTeacher === t.name ? 'selected' : '';
+                    const div = document.createElement('div');
+                    div.className = `pool-item ${isSel}`;
+                    div.setAttribute('draggable', 'true');
+                    div.innerHTML = `<span class="hours-badge">${remain}</span><strong>${as.subject}</strong><br>${t.name}`;
+                    
+                    div.onpointerdown = () => pickTeacher(t.name, as.subject, 'pool');
+                    div.ondragstart = (e) => onDs(e, 'pool', t.name, as.subject);
+                    container.appendChild(div);
+                }
+            });
+        });
+    }
+
+    function renderTeacherTable() {
+        const body = document.getElementById('teacherTableBody');
+        body.innerHTML = '';
+        document.getElementById('teacherTitle').innerText = selectedTeacher ? `🔍 ${selectedTeacher} 行程` : "🔍 點選老師查看";
+        for(let p=1; p<=7; p++) {
+            let tr = `<tr>`;
+            for(let d=1; d<=5; d++) {
+                const key = `${d}-${p}`;
+                let occ = null;
+                for(let cN in db.schedules) {
+                    if(db.schedules[cN][key]?.name === selectedTeacher) { occ = {cN, sub: db.schedules[cN][key].sub}; break; }
+                }
+                tr += `<td ondragover="evP(event)" ondrop="onDp(event, '${key}')" onclick="onCellClick('${key}')">
+                    ${occ ? occ.cN + '<br>' + occ.sub : ''}</td>`;
+            }
+            body.innerHTML += tr + "</tr>";
+        }
+    }
+
+    function onDs(e, type, name, sub, oldKey = '') {
+        dragData = { type, name, sub, oldKey, targetClass: currentClass };
+        e.dataTransfer.setData("text/plain", "dragging");
+    }
+
+    function onDp(e, newKey) {
+        e.preventDefault();
+        executeMove(newKey);
+    }
+
+    function onCellClick(newKey) {
+        if(dragData) executeMove(newKey);
+    }
+
+    function executeMove(newKey) {
+        if(!dragData) return;
+        const { type, name, sub, oldKey, targetClass } = dragData;
+        
+        for(let cN in db.schedules) {
+            if(db.schedules[cN][newKey]?.name === name && (type === 'pool' || oldKey !== newKey)) {
+                alert(`❌ 衝堂：${name} 已在 ${cN} 有課`); 
+                dragData = null; renderAll(); return;
+            }
+        }
+
+        if(type !== 'pool') delete db.schedules[targetClass][oldKey];
+        if(!db.schedules[currentClass]) db.schedules[currentClass] = {};
+        db.schedules[currentClass][newKey] = { name, sub };
+        
+        dragData = null; 
+        renderAll(); sync();
+    }
+
+    function handleBackDrop(e) {
+        if(dragData && dragData.type !== 'pool') {
+            delete db.schedules[dragData.targetClass][dragData.oldKey];
+            dragData = null; renderAll(); sync();
+        }
+    }
+
+    async function sync() { await fetch('/save_data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(db) }); }
+    
+    function renderGradeButtons() {
+        const p = document.getElementById('gradePanel'); p.innerHTML = "";
+        const labels = ["一","二","三","四","五","六"];
+        labels.forEach((g,i)=>{
+            const rowClasses = db.classes.filter(c=>c.name.startsWith(i+1));
+            if(rowClasses.length){
+                const d = document.createElement('div');
+                d.className = 'grade-row';
+                d.innerHTML = `<span class="grade-label">${g}年級：</span>`;
+                rowClasses.forEach(c=>{
+                    const b = document.createElement('button');
+                    b.className = `class-btn ${currentClass===c.name?'active':''}`;
+                    b.innerText = c.name; b.onclick = ()=>selectClass(c.name);
+                    d.appendChild(b);
+                });
+                p.appendChild(d);
             }
         });
     }
 
-    function addClass() {
-        const input = document.getElementById('classNameInput');
-        if (!input.value) return alert("請輸入班級名稱");
-        classes.push({ id: Date.now(), name: input.value, subjects: {} });
-        input.value = '';
-        render();
-        syncWithServer();
+    // Excel 匯入
+    function importClassExcel(e) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            db.classes = json.map(row => ({ name: String(row['班級']), subjects: row['科目'] }));
+            renderGradeButtons(); sync(); alert("✅ 班級匯入成功！");
+        };
+        reader.readAsArrayBuffer(e.target.files[0]);
     }
 
-    function addNewSubject() {
-        const name = prompt("請輸入新科目名稱：");
-        if (name && !subjects.includes(name)) {
-            subjects.push(name);
-            render();
-            syncWithServer();
-        }
-    }
-
-    function updateHour(classId, sub, delta) {
-        const cls = classes.find(c => c.id === classId);
-        if (!cls.subjects[sub]) cls.subjects[sub] = 0;
-        cls.subjects[sub] = Math.max(0, cls.subjects[sub] + delta);
-        render();
-        syncWithServer();
-    }
-
-    function copyToGrade(sourceName, sourceId) {
-        const grade = sourceName.charAt(0);
-        const sourceCls = classes.find(c => c.id === sourceId);
-        classes.forEach(cls => {
-            if (cls.name.startsWith(grade)) {
-                cls.subjects = JSON.parse(JSON.stringify(sourceCls.subjects));
-            }
-        });
-        alert(`已複製 ${grade} 年級設定`);
-        render();
-        syncWithServer();
-    }
-
-    function deleteClass(id) {
-        if(confirm("確定刪除？")) {
-            classes = classes.filter(c => c.id !== id);
-            render();
-            syncWithServer();
-        }
-    }
-
-    async function syncWithServer() {
-        await fetch('/save_data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ classes, subjects })
-        });
-    }
-
-    function render() {
-        const list = document.getElementById('classList');
-        list.innerHTML = classes.map(cls => {
-            const total = Object.values(cls.subjects).reduce((a, b) => a + b, 0);
-            return `
-                <li class="class-item" data-id="${cls.id}">
-                    <div class="class-header">
-                        <div>
-                            <span class="drag-handle">☰</span>
-                            <span style="font-size: 1.2em; font-weight: bold;">${cls.name} 班</span>
-                        </div>
-                        <div class="total-badge">總節數：${total}</div>
-                        <div>
-                            <button onclick="copyToGrade('${cls.name}', ${cls.id})" style="background:#4caf50; color:white;">年級複製</button>
-                            <button onclick="deleteClass(${cls.id})" style="background:#f44336; color:white;">刪除</button>
-                        </div>
-                    </div>
-                    <div class="subject-grid">
-                        ${subjects.map(sub => {
-                            const count = cls.subjects[sub] || 0;
-                            return `
-                                <button class="sub-btn ${count > 0 ? 'active' : ''}" 
-                                    onmousedown="if(event.button==0) updateHour(${cls.id}, '${sub}', 1)"
-                                    oncontextmenu="updateHour(${cls.id}, '${sub}', -1); return false;">
-                                    ${sub} <span class="sub-count">${count}</span>
-                                </button>
-                            `;
-                        }).join('')}
-                    </div>
-                </li>
-            `;
-        }).join('');
+    function importTeacherExcel(e) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            db.teachers = [];
+            json.forEach(row => {
+                let t = db.teachers.find(x => x.name === row['教師姓名']);
+                if(!t) { t = { name: row['教師姓名'], assignments: [] }; db.teachers.push(t); }
+                t.assignments.push({ className: String(row['授課班級']), subject: row['授課科目'], hours: parseInt(row['每週節數']) });
+            });
+            renderPool(); sync(); alert("✅ 教師匯入成功！");
+        };
+        reader.readAsArrayBuffer(e.target.files[0]);
     }
 
     function exportJSON() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({classes, subjects}));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "school_data.json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], {type: "application/json"}));
+        a.download = `課表存檔.json`; a.click();
     }
 
-    function importJSON(event) {
+    document.getElementById('importFile').onchange = (e) => {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = JSON.parse(e.target.result);
-            classes = data.classes || [];
-            subjects = data.subjects || subjects;
-            render();
-            syncWithServer();
+        reader.onload = async (evt) => {
+            db = JSON.parse(evt.target.result);
+            await sync(); renderGradeButtons(); selectClass(db.classes[0].name);
+            alert("✅ 存檔匯入成功！");
         };
-        reader.readAsText(event.target.files[0]);
-    }
+        reader.readAsText(e.target.files[0]);
+    };
 </script>
-
 </body>
 </html>
